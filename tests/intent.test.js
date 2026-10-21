@@ -13,10 +13,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createGame, stepGame, skipTo, PHASES } from '../src/sim.js';
 import { STEP, CAM, FUNDAMENTALS, VILLAIN, FOES, GAME_TITLE, GAME_TAGLINE } from '../src/config.js';
-import { SCRIPT, LINES, NPCS } from '../src/script.js';
+import { SCRIPT, LINES, NPCS, CHAPTERS } from '../src/script.js';
 import { makeBot, play } from './bot.js';
 
 const before = (phase) => PHASES.slice(0, PHASES.indexOf(phase));
+const PHASES_INTRO_TALK = 14; // the elder is still talking
 
 // ---------- no spoilers ----------
 
@@ -92,6 +93,35 @@ test('intent: fights get harder - easy grunts first, then bigger brutes, then th
     assert.notEqual(s.phase, 'fallen', `${key} is still winnable`);
     assert.notEqual(s.phase, key, `${key} finished`);
   }
+});
+
+// ---------- always know what to do and why (owner's feedback, 2026-10-21) ----------
+
+test('intent: you know why - the elder asks for your help against the bandits before the tutorial', () => {
+  const asks = SCRIPT.intro.map((b) => b.line?.text || '').join(' ');
+  assert.match(asks, /bandit/i, 'the threat is explained');
+  assert.match(asks, /help us/i, 'you are asked to help');
+});
+
+test('intent: clear direction - every step before he comes has an objective with a reason and a way to find it', () => {
+  const g = createGame(1), bot = makeBot();
+  const seen = new Map();
+  while (g.phase !== 'arrival' && g.t < 900) {
+    stepGame(g, bot(g));
+    const o = g.objective;
+    if (g.phase === 'intro' && g.phaseT < PHASES_INTRO_TALK) continue;
+    if (!seen.has(g.phase)) seen.set(g.phase, 0);
+    if (!o) { seen.set(g.phase, seen.get(g.phase) + 1); continue; }
+    assert.ok(o.text, `${g.phase}: objective without text`);
+    if (o.kind !== 'none') {
+      assert.ok(o.why, `${g.phase}: "${o.text}" says what but not why`);
+      assert.ok(o.x != null || o.npc || o.kind === 'talkAny', `${g.phase}: "${o.text}" has nothing to point the marker at`);
+    }
+  }
+  // short gaps are fine (a line playing out), long ones leave the player lost
+  for (const [phase, frames] of seen) assert.ok(frames / 60 < 12, `${phase}: ${Math.round(frames / 60)} s with no objective`);
+  for (const p of PHASES.slice(0, PHASES.indexOf('arrival'))) assert.ok(CHAPTERS[p], `${p} belongs to a chapter`);
+  assert.ok(!CHAPTERS.arrival, 'no chapter card announces him');
 });
 
 // ---------- the villain ----------

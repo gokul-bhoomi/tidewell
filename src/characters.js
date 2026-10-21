@@ -74,8 +74,9 @@ export function makeCharacter(spec) {
     const knee = joint(hip, 0, -0.42);
     part(G.joint, mats.legs, knee, { sx: big ? 0.11 : 0.088, sy: big ? 0.11 : 0.088, sz: big ? 0.11 : 0.088, outline: false });
     part(G.shin, mats.legs, knee, { y: -0.2, sx: big ? 1.25 : 1, sz: big ? 1.25 : 1 });
-    part(G.foot, mats.shoe, knee, { y: -0.44, z: 0.05, sx: big ? 1.3 : 1 });
-    return { hip, knee };
+    const ankle = joint(knee, 0, -0.44);
+    part(G.foot, mats.shoe, ankle, { z: 0.05, sx: big ? 1.3 : 1 });
+    return { hip, knee, ankle };
   };
   const L = leg(1), R = leg(-1);
   const spine = joint(hips, 0, 0.05);
@@ -191,7 +192,7 @@ export function makeCharacter(spec) {
     root, body, hips, spine, chest, neck, head, L, R, AL, AR, scarf, weapon, mats: all, faceMat: mats.skin,
     faceOpen: mats.skin.map, faceBlink: blinkMap,
     phase: Math.random() * 6, t: Math.random() * 10, blinkT: 2 + Math.random() * 3, flash: 0, scale, spec: s,
-    cur: null,
+    cur: null, spd: 0, prevYaw: null, roll: 0, recoil: 0, squash: 0, squashV: 0,
   };
 }
 
@@ -199,33 +200,56 @@ export function makeCharacter(spec) {
 
 const ZERO = () => ({
   y: 0, lean: 0, roll: 0, spin: 0, spineY: 0, spineX: 0, headX: 0, headY: 0,
-  hipL: 0, kneeL: 0, hipR: 0, kneeR: 0, hipLz: 0, hipRz: 0,
+  hipL: 0, kneeL: 0, hipR: 0, kneeR: 0, hipLz: 0, hipRz: 0, ankL: 0, ankR: 0,
   shLx: 0, shLz: 0.08, elL: -0.15, shRx: 0, shRz: -0.08, elR: -0.15, handR: 0,
 });
 
-// st: { speed (m/s), act, k (0..1 progress of the action), n (combo index), down, downT, t }
+// st: { speed (m/s), act, k (0..1 progress of the action), n (combo index), down, downT,
+//       look: {x, z} to turn the head toward, flinch, glow }
+// Also reads c.root (position and yaw), so set those before calling.
 export function pose(c, st, dt) {
   c.t += dt;
   const P = ZERO();
-  const t = c.t, spd = st.speed || 0;
-  const run = Math.min(1, spd / 6), walking = spd > 0.15;
+  const t = c.t;
+  // smoothed speed, so starting, stopping, walking and running blend instead of snapping
+  c.spd += ((st.speed || 0) - c.spd) * (1 - Math.exp(-dt * 10));
+  const spd = c.spd, run = Math.min(1, spd / 6), walking = spd > 0.12, gait = Math.min(1, spd / 1.2);
+
+  // lean into turns
+  const yaw = c.root.rotation.y;
+  if (c.prevYaw != null && dt > 0) {
+    const turn = Math.atan2(Math.sin(yaw - c.prevYaw), Math.cos(yaw - c.prevYaw)) / dt;
+    c.roll += (Math.max(-0.28, Math.min(0.28, -turn * 0.035 * (0.3 + run))) - c.roll) * (1 - Math.exp(-dt * 8));
+  }
+  c.prevYaw = yaw;
 
   // locomotion
   if (walking) {
-    c.phase += dt * spd * (Math.PI * 2) / (1.1 + run * 0.7);
-    const ph = c.phase, A = 0.45 + run * 0.4, B = 0.6 + run * 0.7;
+    c.phase += dt * spd * (Math.PI * 2) / (1.15 + run * 0.75);
+    const ph = c.phase, A = (0.42 + run * 0.45) * gait, B = (0.55 + run * 0.95) * gait;
     P.hipL = -Math.sin(ph) * A; P.hipR = Math.sin(ph) * A;
-    P.kneeL = Math.max(0, -Math.cos(ph)) * B + 0.1; P.kneeR = Math.max(0, Math.cos(ph)) * B + 0.1;
-    P.shLx = Math.sin(ph) * (0.35 + run * 0.5); P.shRx = -Math.sin(ph) * (0.35 + run * 0.5);
-    P.elL = P.elR = -(0.25 + run * 1.0);
-    P.y = -Math.abs(Math.cos(ph)) * (0.03 + run * 0.05) + 0.02;
-    P.lean = 0.05 + run * 0.22;
-    P.spineY = Math.sin(ph) * (0.08 + run * 0.12);
-    P.headY = -P.spineY * 0.6;
-  } else {
-    const b = Math.sin(t * 1.8);
-    P.spineX = b * 0.02; P.y = b * 0.005; P.headX = b * 0.02;
-    P.shLz = 0.1 + b * 0.02; P.shRz = -0.1 - b * 0.02;
+    P.kneeL = Math.max(0, -Math.cos(ph)) * B + 0.08; P.kneeR = Math.max(0, Math.cos(ph)) * B + 0.08;
+    // feet: toe down as the leg swings back, heel strike in front
+    P.ankL = Math.sin(ph) * 0.35 * gait - P.kneeL * 0.25; P.ankR = -Math.sin(ph) * 0.35 * gait - P.kneeR * 0.25;
+    P.shLx = Math.sin(ph) * (0.35 + run * 0.65) * gait; P.shRx = -Math.sin(ph) * (0.35 + run * 0.65) * gait;
+    P.shLz = 0.1 + run * 0.08; P.shRz = -0.1 - run * 0.08;
+    P.elL = -(0.25 + run * 1.15) - Math.max(0, Math.sin(ph)) * 0.25 * run; P.elR = -(0.25 + run * 1.15) - Math.max(0, -Math.sin(ph)) * 0.25 * run;
+    P.y = (-Math.abs(Math.cos(ph)) * (0.03 + run * 0.06) + 0.02) * gait;
+    P.lean = (0.04 + run * 0.24) * gait; P.headX = -P.lean * 0.6;
+    P.spineY = Math.sin(ph) * (0.08 + run * 0.16) * gait;
+    P.roll = Math.sin(ph) * 0.03 * gait;
+  }
+  if (spd < 0.6) { // idle: breathing and a slow weight shift
+    const b = Math.sin(t * 1.8), w = Math.sin(t * 0.55 + c.phase), q = 1 - spd / 0.6;
+    P.spineX += b * 0.025 * q; P.y += b * 0.006 * q; P.headX += b * 0.02 * q;
+    P.roll += w * 0.035 * q; P.hipL += w * 0.05 * q; P.hipR -= w * 0.05 * q; P.kneeL += Math.max(0, w) * 0.12 * q; P.kneeR += Math.max(0, -w) * 0.12 * q;
+    P.headY += Math.sin(t * 0.37 + c.phase) * 0.22 * q; // looking around
+  }
+  // look at someone
+  if (st.look) {
+    const a = Math.atan2(st.look.x - c.root.position.x, st.look.z - c.root.position.z);
+    const rel = Math.atan2(Math.sin(a - yaw), Math.cos(a - yaw));
+    if (Math.abs(rel) < 2.2) { P.headY = Math.max(-1.0, Math.min(1.0, rel)) * 0.8; P.spineY += Math.max(-0.4, Math.min(0.4, rel)) * 0.25; }
   }
 
   const k = st.k ?? 0, act = st.act;
@@ -233,15 +257,16 @@ export function pose(c, st, dt) {
   switch (act) {
     case 'strike': {
       const pre = 1 - ease(0, 0.3), hit = ease(0.2, 0.35) * (1 - ease(0.6, 1));
-      if (st.n === 0) { // right jab
-        P.shRx = 0.3 * pre - 1.55 * hit; P.shRz = -0.1; P.elR = -1.6 * pre - 0.05 * hit; P.spineY = 0.25 * pre - 0.4 * hit; P.lean = 0.12;
-        P.shLx = -0.9; P.elL = -1.6; P.shLz = -0.2;
-      } else if (st.n === 1) { // left hook
-        P.shLx = 0.2 * pre - 1.35 * hit; P.shLz = 0.3 * pre - 0.7 * hit; P.elL = -1.2 * pre - 0.5 * hit; P.spineY = -0.3 * pre + 0.5 * hit; P.lean = 0.1;
-        P.shRx = -0.9; P.elR = -1.6; P.shRz = 0.2;
+      if (st.n === 0) { // right jab: load the hip, step in, snap the arm, other hand guards the chin
+        P.shRx = 0.35 * pre - 1.6 * hit; P.shRz = -0.1; P.elR = -1.7 * pre - 0.05 * hit; P.spineY = 0.3 * pre - 0.5 * hit; P.lean = 0.05 + 0.2 * hit;
+        P.shLx = -1.1; P.elL = -1.9; P.shLz = -0.35; P.hipL = -0.45 * hit; P.kneeL = 0.3; P.hipR = 0.25 * hit; P.kneeR = 0.25; P.ankR = 0.3 * hit;
+        P.y = -0.05 * hit; P.headY = 0.2 * hit;
+      } else if (st.n === 1) { // left hook: the whole torso turns into it
+        P.shLx = 0.2 * pre - 1.3 * hit; P.shLz = 0.4 * pre - 0.85 * hit; P.elL = -1.3 * pre - 0.6 * hit; P.spineY = -0.4 * pre + 0.65 * hit; P.lean = 0.08 + 0.12 * hit;
+        P.shRx = -1.1; P.elR = -1.9; P.shRz = 0.35; P.hipR = -0.3 * hit; P.kneeR = 0.35; P.kneeL = 0.3; P.y = -0.06 * hit; P.roll = 0.1 * hit;
       } else { // spinning kick
         P.spin = ease(0, 0.6) * Math.PI * 2;
-        P.hipR = -1.55 * Math.sin(Math.PI * ease(0.1, 0.8)); P.kneeR = 0.15; P.hipL = 0.2; P.kneeL = 0.5;
+        P.hipR = -1.6 * Math.sin(Math.PI * ease(0.1, 0.8)); P.kneeR = 0.15 + 0.6 * (1 - ease(0.15, 0.4)); P.ankR = 0.5; P.hipL = 0.25; P.kneeL = 0.6; P.ankL = -0.2;
         P.shLz = 1.3; P.shRz = -1.3; P.elL = P.elR = -0.3; P.lean = -0.15; P.y = 0.18 * Math.sin(Math.PI * ease(0, 0.8));
       }
       break;
@@ -277,13 +302,23 @@ export function pose(c, st, dt) {
   }
   if (st.flinch) { P.lean -= 0.2; P.headX -= 0.2; }
 
-  // smooth everything except the walk cycle so poses blend
+  // reactions on top: recoil from hits, lean into turns
+  c.recoil = Math.max(0, c.recoil - dt * 3.5);
+  P.lean -= c.recoil * 0.45; P.headX -= c.recoil * 0.4; P.shLz += c.recoil * 0.5; P.shRz -= c.recoil * 0.5;
+  P.roll += c.roll;
+
+  // blend toward the target pose (fast, so it stays snappy but never pops)
   if (!c.cur) c.cur = { ...P };
-  const a = walking && !act ? 1 : 1 - Math.exp(-dt * 22);
+  const a = 1 - Math.exp(-dt * (act ? 24 : 16));
   for (const key in P) c.cur[key] += (P[key] - c.cur[key]) * a;
   if (act === 'strike' && st.n === 2) c.cur.spin = P.spin; // the spin must not be smoothed
   const Q = c.cur;
   c.body.position.y = Q.y; c.body.rotation.set(Q.lean, Q.spin, Q.roll);
+  c.L.ankle.rotation.x = Q.ankL; c.R.ankle.rotation.x = Q.ankR;
+  // squash and stretch (landings, jumps): a little spring
+  c.squashV += (-c.squash * 180 - c.squashV * 14) * dt; c.squash += c.squashV * dt;
+  const sq = Math.max(-0.3, Math.min(0.3, c.squash));
+  c.body.scale.set(1 + sq * 0.5, 1 - sq, 1 + sq * 0.5);
   c.spine.rotation.set(Q.spineX, Q.spineY, 0);
   c.neck.rotation.set(Q.headX, Q.headY, 0);
   c.L.hip.rotation.set(Q.hipL, 0, Q.hipLz); c.L.knee.rotation.x = Q.kneeL;
@@ -384,3 +419,8 @@ export function poseVillain(v, st, dt) {
   v.SL.sh.rotation.set(0, 0, 0.18);
   v.body.position.y = Math.sin(t * 1.3) * 0.06;
 }
+
+// a hit lands on this character: recoil (bigger for a finisher) and flash
+export function hitReact(c, amount = 1) { c.recoil = Math.max(c.recoil, amount); c.flash = 1; }
+// a landing or a hop: squash down, then spring back
+export function squash(c, amount = 0.25) { c.squashV -= amount * 10; }

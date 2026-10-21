@@ -17,7 +17,7 @@ const COMBAT = (f) => f.type !== 'dummy';
 export function createGame(seed = 1) {
   const g = {
     seed, rand: rng(seed), t: 0, phase: null, phaseT: 0, fired: new Set(), next: null,
-    stage: 'stranger', npcMode: 'wander', talked: new Set(), objective: null, prompt: null, near: null,
+    stage: 'stranger', npcMode: 'wander', talked: new Set(), objective: null, prompt: null, near: null, chapter: null,
     tut: { step: 'go', hits: 0, blocks: 0, lastTap: -9 },
     fight: null, checkpoint: null, hitstop: 0, sky: 0, dusk: 0, music: 'village', judgeAt: null,
     player: {
@@ -398,7 +398,7 @@ export function snapshot(g) {
   const p = g.player, v = g.villain;
   return {
     t: r(g.t), phase: g.phase, phaseT: r(g.phaseT), stage: g.stage, sky: r(g.sky), dusk: r(g.dusk), music: g.music,
-    objective: g.objective && { ...g.objective }, prompt: g.prompt, near: g.near, tut: { ...g.tut }, talked: [...g.talked],
+    objective: g.objective && { ...g.objective }, prompt: g.prompt, near: g.near, tut: { ...g.tut }, talked: [...g.talked], chapter: g.chapter,
     fight: g.fight && { key: g.fight.key }, npcMode: g.npcMode,
     player: {
       x: r(p.x), z: r(p.z), y: r(p.y), face: r(p.face), hp: r(p.hp), guard: p.guard, striking: !!p.act, combo: p.combo,

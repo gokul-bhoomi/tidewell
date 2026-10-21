@@ -18,6 +18,8 @@ Run the `verify` skill (`.claude/skills/verify/SKILL.md`) after any change and *
 - **A slow, One Piece-style build-up.** You drop in from the sky, then a tutorial, then walking around and talking. The fights get harder: easy grunts, then brutes, then their captain. Villagers praise you after each win, then there is a celebration. A person takes roughly 5+ minutes to reach him.
 - **Better-looking characters:** toon shading, ink outlines, painted faces, cloth textures, and jointed animation.
 - **He beats you and disappears.**
+- **Always know why and what next** (second playtest, 2026-10-21). The elder asks for your help against the bandits. Every objective has a reason. There are chapter cards and NEW OBJECTIVE popups, **!** marks over villagers you still need to talk to, and a marker toward the goal. A big **E Talk** prompt floats on the villager you're next to.
+- **The mouse steers the camera.** It's captured when the game starts and on click, and moves the camera left/right and up/down; a hint shows when it isn't captured.
 
 Kept from the first version:
 
@@ -45,6 +47,7 @@ Not decided or not built yet on purpose (don't add these without asking):
 - `tests/bot.js` plays the whole game like a player: it follows objectives, routes around houses, talks, and fights. If you add an objective kind or a mechanic the bot can't handle, teach the bot, because the intent tests and the smoke test depend on it reaching the end.
 - New screens or features need a check in `tests/smoke.mjs`.
 - Visual changes also need a look at the smoke screenshots in `test-results/` and the manual browser steps in the verify skill, because the automated checks can't judge looks.
+- **Direction rule:** every new objective needs a `why` and something for the marker to point at (`x`/`z`, `npc`, or `talkAny`). Set it with `setObjective()` in `story.js` so it pops up. The intent test plays the game and checks this.
 - **No-spoiler rule:** any new line spoken before the `arrival` phase must not mention him or foreshadow him. The intent test scans `script.js` for this.
 
 ## Layout

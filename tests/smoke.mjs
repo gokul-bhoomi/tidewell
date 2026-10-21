@@ -79,6 +79,7 @@ await check('Enter: the hero falls from the sky and lands in the plaza', async (
   await steps(40);
   let s = await snap();
   expect(s.screen === 'game' && s.game.phase === 'intro' && s.game.player.y > 1, `phase ${s.game.phase}, y ${s.game.player.y}`);
+  expect(s.hud.chapterCard === '1: The Sky-Faller', `no chapter card: ${s.hud.chapterCard}`);
   await shot('02-falling');
   await steps(170);
   s = await snap();
@@ -87,8 +88,29 @@ await check('Enter: the hero falls from the sky and lands in the plaza', async (
   await shot('03-landed');
 });
 
+await check('direction: the elder asks for help, then a new objective pops up with a reason and a marker', async () => {
+  await game(() => window.__game.debug.play(() => ({}), 60 * 14, (g) => g.phase === 'tutorial'));
+  await steps(20);
+  const s = await snap();
+  expect(s.hud.toast?.includes('training yard'), `no NEW OBJECTIVE popup: ${s.hud.toast}`);
+  expect(s.hud.objective.includes('training yard') && s.hud.why.length > 10, `quest card: ${s.hud.objective} / ${s.hud.why}`);
+  expect(s.hud.chapter.includes('Chapter 1'), `no chapter on the quest card: ${s.hud.chapter}`);
+  expect(s.hud.marker, 'no marker toward the yard');
+  await shot('03b-objective');
+});
+
+await check('mouse: moving it turns the camera and tilts it up and down; a hint shows when it is not captured', async () => {
+  const before = await snap();
+  await game(() => { const d = window.__game.debug; d.mouse(300, 0); d.step(1); d.mouse(0, -150); d.step(10); });
+  const after = await snap();
+  expect(Math.abs(after.camYaw - before.camYaw) > 0.5, `yaw ${before.camYaw} -> ${after.camYaw}`);
+  expect(after.camPitch < before.camPitch - 0.15, `pitch ${before.camPitch} -> ${after.camPitch}`);
+  const locked = await game(() => !!document.pointerLockElement);
+  expect(locked || after.hud.mouseHint, 'mouse not captured and no hint about clicking');
+  await game(() => { const d = window.__game.debug; d.camPitch(0); });
+});
+
 await check('keyboard: WASD walks, E talks to the villager in front of you', async () => {
-  await game(() => window.__game.debug.play(() => ({}), 60 * 12, (g) => g.phase === 'tutorial'));
   const p0 = (await snap()).game.player;
   await page.keyboard.down('KeyW'); await steps(40); await page.keyboard.up('KeyW');
   const p1 = (await snap()).game.player;
@@ -96,6 +118,7 @@ await check('keyboard: WASD walks, E talks to the villager in front of you', asy
   await game(() => { const d = window.__game.debug, t = d.game().npcs.find((n) => n.id === 'nell'); d.set({ x: t.x + 1.3, z: t.z }); });
   await steps(3);
   expect((await snap()).hud.talk?.includes('NELL'), 'no talk prompt next to Nell');
+  expect((await snap()).hud.talk?.includes('E'), 'the talk prompt does not show the E key');
   await page.keyboard.press('KeyE'); await steps(5);
   const s = await snap();
   expect(s.hud.bubbles.some((b) => b.startsWith('nell:')), `no speech bubble: ${s.hud.bubbles}`);
@@ -116,7 +139,11 @@ await check('tutorial: training yard, dummies, combo, blocking Bram', async () =
 });
 
 await check('roam, then the first bandits at the east gate: easy', async () => {
-  let s = await playUntil('fight1', 200);
+  await steps(30);
+  let s = await snap();
+  expect(s.hud.marks >= 3 && s.hud.toast?.includes('Meet the villagers'), `no ! marks over villagers (${s.hud.marks}) or popup (${s.hud.toast})`);
+  await shot('06b-meet-villagers');
+  s = await playUntil('fight1', 200);
   expect(s.game.talked.length >= 4, `talked to ${s.game.talked.length} villagers`);
   await game(() => window.__game.debug.play(window.__bot, 60 * 30, (g) => g.foes.some((f) => f.state === 'windup' || f.state === 'stagger')));
   await steps(6);

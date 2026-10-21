@@ -259,3 +259,19 @@ test('same seed, same inputs, same game', () => {
   const playIt = () => { const g = createGame(9); play(g, stepGame, makeBot(), () => false, 200); return JSON.stringify(snapshot(g)); };
   assert.equal(playIt(), playIt());
 });
+
+test('new objectives and chapters are announced; counter updates are not', () => {
+  const g = createGame(1);
+  const ev = [...g.events, ...events(g, {}, PHASE_LEN.intro + 0.1)]; // the chapter card comes with the new game
+  assert.deepEqual(ev.filter((e) => e.type === 'chapter').map((e) => e.n), [1]);
+  const objs = ev.filter((e) => e.type === 'objective');
+  assert.equal(objs.length, 1);
+  assert.match(objs[0].text, /training yard/);
+  assert.ok(objs[0].why);
+  const r = skipTo(createGame(1), 'roam1');
+  const sana = r.npcs.find((n) => n.id === 'sana');
+  Object.assign(r.player, { x: sana.x + 1.5, z: sana.z });
+  stepGame(r, {});
+  const after = events(r, { talk: true }, 0.1);
+  assert.equal(after.filter((e) => e.type === 'objective').length, 0, '1/4 -> 2/4 is not a new objective');
+});

@@ -4,7 +4,7 @@
 // intro -> tutorial -> roam1 -> fight1 -> praise1 -> roam2 -> fight2 -> praise2 -> roam3 -> fight3
 //       -> festival -> arrival -> defiance -> judgement -> aftermath -> end      ('fallen' = retry a fight)
 import { PLAYER, PHASE_LEN, VILLAIN, FIGHTS } from './config.js';
-import { SCRIPT, LINES } from './script.js';
+import { SCRIPT, LINES, CHAPTERS } from './script.js';
 import { PLACES, DUMMIES, BRAM_POST } from './world.js';
 import { emit, say, addFoe, dist, clamp } from './sim.js';
 
@@ -15,12 +15,22 @@ const easeInOut = (k) => k * k * (3 - 2 * k);
 const npc = (g, id) => g.npcs.find((n) => n.id === id);
 const later = (g, s, fn) => { g.next = { at: g.t + s, fn }; };
 const go = (phase) => (g) => enterPhase(g, phase);
+const base = (t) => (t || '').replace(/\s*\(\d+\/\d+\)/, '');
+// Set the objective; a new one (not just a counter update) pops up on screen.
+function setObjective(g, o) {
+  const prev = g.objective;
+  g.objective = o;
+  if (o && o.kind !== 'none' && base(prev?.text) !== base(o.text)) emit(g, { type: 'objective', text: base(o.text), why: o.why || '' });
+}
 
 export function enterPhase(g, phase) {
   const prev = g.phase;
   g.phase = phase; g.phaseT = 0; g.fired = new Set(); g.next = null; g.prompt = null;
   const p = g.player;
   emit(g, { type: 'phase', phase, prev });
+  const ch = CHAPTERS[phase];
+  if (ch && ch[0] !== g.chapter?.n && prev !== 'fallen') { g.chapter = { n: ch[0], title: ch[1] }; emit(g, { type: 'chapter', n: ch[0], title: ch[1] }); }
+  if (!ch && phase !== 'fallen') g.chapter = null;
   switch (phase) {
     case 'intro': {
       p.x = PLACES.landing.x; p.z = PLACES.landing.z; p.y = PLAYER.fallFrom; p.face = Math.PI;
@@ -33,11 +43,11 @@ export function enterPhase(g, phase) {
     }
     case 'tutorial':
       g.tut.step = 'go';
-      g.objective = { kind: 'go', text: 'Go to the training yard (down the west road)', x: PLACES.yard.x, z: PLACES.yard.z, r: 8 };
+      setObjective(g, { kind: 'go', text: 'Go to the training yard (down the west road)', why: 'Bram will teach you to fight, so you can protect Tidewell.', x: PLACES.yard.x, z: PLACES.yard.z, r: 8 });
       break;
     case 'roam1':
       g.talked = new Set(); g.alarmAt = null;
-      g.objective = { kind: 'talkAny', text: 'Explore Tidewell and meet the villagers', count: 4, done: 0 };
+      setObjective(g, { kind: 'talkAny', text: 'Meet the villagers', why: 'Get to know the people you are protecting. Walk up to anyone with a ! and press E.', count: 4, done: 0 });
       break;
     case 'fight1': case 'fight2': case 'fight3': startFight(g, phase); break;
     case 'praise1': case 'praise2':
@@ -47,15 +57,15 @@ export function enterPhase(g, phase) {
       break;
     case 'roam2':
       g.talked = new Set(); g.alarmAt = null; g.npcMode = 'wander';
-      g.objective = { kind: 'talkAny', text: 'Wander the village', count: 3, done: 0 };
+      setObjective(g, { kind: 'talkAny', text: 'Walk around the village', why: 'Everyone wants to thank you. Find the people marked with !', count: 3, done: 0 });
       break;
     case 'roam3':
       g.npcMode = 'wander';
-      g.objective = { kind: 'none', text: 'Catch your breath' };
+      g.objective = { kind: 'none', text: 'Catch your breath', why: 'Gorr has lost two raids. He will not be far behind.' };
       break;
     case 'festival':
       g.stage = 'festival'; g.npcMode = 'festival'; g.fight = null;
-      g.objective = { kind: 'talk', npc: 'toma', text: 'Join the festival in the plaza: talk to Elder Toma' };
+      setObjective(g, { kind: 'talk', npc: 'toma', text: 'Join the festival: talk to Elder Toma', why: 'The bandits are gone for good. Tidewell is celebrating you!' });
       emit(g, { type: 'victory', big: true });
       break;
     case 'arrival': {
@@ -103,7 +113,8 @@ function startFight(g, key) {
   g.checkpoint = key;
   g.npcMode = 'hide';
   const text = { fight1: 'Defend the east gate', fight2: 'Save the market', fight3: 'Defeat Captain Gorr' }[key];
-  g.objective = { kind: 'fight', text, x: at.x, z: at.z };
+  const why = { fight1: 'Bandits are coming through the gate. Stop them before they reach the houses!', fight2: 'They are robbing the market stalls. Drive them out!', fight3: 'Beat the bandit captain and the raids end for good.' }[key];
+  setObjective(g, { kind: 'fight', text, why, x: at.x, z: at.z });
 }
 
 // Start the current fight again after being knocked out.
@@ -130,7 +141,7 @@ export function stepStory(g, dt) {
         g.tut.step = 'strike';
         say(g, LINES.bramYard);
         g.prompt = { keys: ['J'], text: 'Strike' };
-        g.objective = { kind: 'dummy', text: 'Hit the training dummies (0/3)', x: DUMMIES[1].x, z: DUMMIES[1].z };
+        setObjective(g, { kind: 'dummy', text: 'Hit the training dummies (0/3)', why: 'Walk up to a straw dummy and press J.', x: DUMMIES[1].x, z: DUMMIES[1].z });
       }
       break;
     case 'roam1': case 'roam2': {
@@ -155,9 +166,9 @@ export function stepStory(g, dt) {
     case 'praise1': case 'praise2':
       if (g.phaseT >= PHASE_LEN.praise && g.npcMode === 'gather') {
         g.npcMode = 'wander';
-        g.objective = g.phase === 'praise1'
-          ? { kind: 'talk', npc: 'toma', text: 'Return to the plaza and talk to Elder Toma' }
-          : { kind: 'talk', npc: 'mira', text: 'Get patched up: talk to Mira the healer' };
+        setObjective(g, g.phase === 'praise1'
+          ? { kind: 'talk', npc: 'toma', text: 'Tell Elder Toma what happened', why: 'He is waiting in the plaza. Follow the marker.' }
+          : { kind: 'talk', npc: 'mira', text: 'Get patched up by Mira the healer', why: 'You took some hits. Mira lives by the east road.' });
       }
       break;
     case 'festival':
@@ -283,13 +294,13 @@ export function onDummyHit(g, n) {
       t.step = 'combo';
       say(g, LINES.bramCombo);
       g.prompt = { keys: ['J', 'J', 'J'], text: 'Keep pressing J: 3-hit combo' };
-      g.objective.text = 'Finish a 3-hit combo on a dummy';
+      setObjective(g, { ...g.objective, text: 'Finish a 3-hit combo on a dummy', why: 'Keep pressing J: jab, hook, then a spinning kick.' });
     }
   } else if (t.step === 'combo' && n === 2) {
     t.step = 'guard';
     say(g, LINES.bramGuard);
     g.prompt = { keys: ['K'], text: 'Hold K: Guard' };
-    g.objective = { kind: 'spar', text: 'Block Bram\'s swing (0/2)', x: BRAM_POST.x, z: BRAM_POST.z };
+    setObjective(g, { kind: 'spar', text: 'Block Bram\'s swing (0/2)', why: 'Stand in front of Bram. When he raises his sword, hold K.', x: BRAM_POST.x, z: BRAM_POST.z });
   }
 }
 

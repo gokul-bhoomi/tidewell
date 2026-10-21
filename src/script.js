@@ -10,7 +10,7 @@ export const NPCS = [
     id: 'toma', name: 'ELDER TOMA', look: { body: 0x7a5c99, legs: 0x3b2f45, skin: 0xd9a77e, hair: 0xe8e4dc, hairStyle: 'bald', beard: true, staff: true },
     home: { x: -4, z: -8 }, route: [{ x: -4, z: -8 }, { x: 4, z: -8 }], speed: 0.8,
     lines: {
-      stranger: ["Tidewell hasn't had a visitor drop in like that in... well, ever.", 'Have you met everyone yet? Go on, they are curious about you.'],
+      stranger: ['Three harvests in a row, the bandits have come. Thank you for staying with us.', 'Have you met everyone yet? Go on, they are curious about you.'],
       hero1: ['Ho ho! The whole village is talking about you.'],
       hero2: ['Rest, child. You have done more than enough today.'],
       festival: ['Eat! Dance! Tonight Tidewell celebrates its hero!'],
@@ -90,7 +90,7 @@ export const NPCS = [
     id: 'juno', name: 'JUNO', look: { body: 0x8a9a3a, legs: 0x5a4a30, skin: 0xd9a77e, hair: 0x7a4a20, hairStyle: 'short', hat: 0xe0c060 },
     home: { x: -30, z: 1.5 }, route: [{ x: -22, z: 1.5 }, { x: -40, z: 1.5 }], speed: 1,
     lines: {
-      stranger: ['Pumpkins this big! Biggest harvest in years. Good omen, having you here.'],
+      stranger: ['Biggest pumpkin harvest in years. Last time, the bandits took half of it. Not this year, I hope!'],
       hero1: ['The bandits always go for my pumpkins. Not anymore!'],
       hero2: ['I named my biggest pumpkin after you. It is a compliment.'],
       festival: ['Pumpkin soup for everyone!'],
@@ -110,7 +110,7 @@ export const NPCS = [
     id: 'gil', name: 'GIL', look: { body: 0x7a4fb5, legs: 0x2a2a3a, skin: 0xe7b08a, hair: 0xd8b25a, hairStyle: 'spiky', bandana: 0x3a6ab0 },
     home: { x: 30, z: 2 }, route: [{ x: 25, z: 2 }, { x: 40, z: 2 }], speed: 1.2,
     lines: {
-      stranger: ['I keep watch on the east gate. Bandits from the hills, mostly. Nothing you need to worry about.'],
+      stranger: ['I keep watch on the east gate. Gorr\'s bandits always come down from the hills that way. If I ring the bell, run!'],
       hero1: ['You took them all down by yourself?! I just ring the bell!'],
       hero2: ['Gorr\'s crew is running out of people to send.'],
       festival: ['No bell tonight. Tonight we party!'],
@@ -140,7 +140,7 @@ export const NPCS = [
     id: 'dara', name: 'DARA', look: { body: 0x5a4a40, legs: 0x2a2420, skin: 0xa86e48, hair: 0x111111, hairStyle: 'short', apron: 0x3a2a20 },
     home: { x: 22, z: -3.8 }, route: [{ x: 16, z: -3.8 }, { x: 24, z: -3.8 }], speed: 0.9,
     lines: {
-      stranger: ['Need a sword? No? You fight with your fists? Huh.'],
+      stranger: ['Need a sword? No? You fight with your fists? Huh. Well, if the bandits come, I want you near my forge.'],
       hero1: ['Fists! Fists against clubs! Unbelievable.'],
       hero2: ['I could forge you gauntlets. You know, to make it fair for them.'],
       festival: ['To the hero! *clang*'],
@@ -157,8 +157,9 @@ export const SCRIPT = {
     { at: 0, music: 'village' },
     T(2.1, L('ELDER TOMA', 'W-whoa! You fell right out of the sky!', 2.6, 'toma')),
     T(4.9, L('PIP', 'That was SO COOL! Do it again!', 2.2, 'pip')),
-    T(7.3, L('ELDER TOMA', 'Ahem. Welcome to Tidewell, traveler. You look like you can handle yourself.', 3.2, 'toma')),
-    T(10.7, L('ELDER TOMA', 'Bram trains our guards in the yard, down the west road. Go show him!', 3.2, 'toma')),
+    T(7.0, L('ELDER TOMA', 'Ahem. Welcome to Tidewell, traveler. I am Toma, the elder here.', 2.8, 'toma')),
+    T(9.9, L('ELDER TOMA', 'Captain Gorr\'s bandits raid us from the hills every harvest, and we have no fighters left.', 3.4, 'toma')),
+    T(13.4, L('ELDER TOMA', 'You look strong. Will you help us? Go see Bram in the training yard, down the west road.', 3.6, 'toma')),
   ],
   roam1: [T(0.5, L('BRAM', 'Go on, meet the village. They won\'t bite.', 2.6, 'bram'))],
   praise1: [
@@ -194,11 +195,11 @@ export const SCRIPT = {
 
 // One-off lines the story triggers itself.
 export const LINES = {
-  bramYard: L('BRAM', "So you're the sky-faller. Let's see you hit those dummies!", 2.8, 'bram'),
+  bramYard: L('BRAM', "So you're the sky-faller who's going to fight for us? Show me. Hit those dummies!", 3, 'bram'),
   bramCombo: L('BRAM', 'Good! Now keep swinging. Three in a row!', 2.6, 'bram'),
   bramGuard: L('BRAM', 'Nice kick! Now block me. Guard when I wind up!', 2.8, 'bram'),
   bramTap: L('BRAM', 'Too slow! Hold K when I raise my arm.', 2.2, 'bram'),
-  bramDone: L('BRAM', "Hah! You'll do just fine around here.", 2.6, 'bram'),
+  bramDone: L('BRAM', "Hah! You're ready. Now go meet the village. They should know who's protecting them.", 3.2, 'bram'),
   alarm1: L('GIL', 'BANDITS! Bandits at the east gate!', 2.8, 'gil'),
   tomaThanks: L('ELDER TOMA', "You saved us! Those were Captain Gorr's men, from the hills.", 3, 'toma'),
   tomaWarn: L('ELDER TOMA', "Gorr won't take this lying down. Rest while you can.", 2.8, 'toma'),
@@ -214,4 +215,13 @@ export const LINES = {
   zero1: L('VEHL', '...', 1.4),
   zero3: L('VEHL', 'Is this what they call a hero?', 2.6),
   fallen: L('ELDER TOMA', 'Get up! Please, get up!', 2.2, 'toma'),
+};
+
+// Chapter cards: shown when a chapter starts. Nothing after the festival gets one.
+export const CHAPTERS = {
+  intro: [1, 'The Sky-Faller'], tutorial: [1, 'The Sky-Faller'],
+  roam1: [2, 'A Village Worth Protecting'], fight1: [2, 'A Village Worth Protecting'], praise1: [2, 'A Village Worth Protecting'],
+  roam2: [3, 'Raid on the Market'], fight2: [3, 'Raid on the Market'], praise2: [3, 'Raid on the Market'],
+  roam3: [4, 'Captain Gorr'], fight3: [4, 'Captain Gorr'],
+  festival: [5, 'The Festival'],
 };

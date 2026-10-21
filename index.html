@@ -12,9 +12,11 @@
 { "imports": { "three": "./vendor/three.module.min.js" } }
 </script>
 <style>
-  :root { --ink: #fff8ec; --gold: #ffd27a; --blood: #ff4a4a; --aura: #6ff3ff; --shadow: 0 2px 0 #1a1216, 0 0 10px rgba(0,0,0,.5); }
+  :root { --ink: #fff8ec; --gold: #ffd27a; --blood: #ff4a4a; --aura: #6ff3ff; --shadow: 0 2px 0 #1a1216, 0 0 10px rgba(0,0,0,.5);
+    --outline: -2px -2px 0 #1a1216, 2px -2px 0 #1a1216, -2px 2px 0 #1a1216, 2px 2px 0 #1a1216, 0 -2px 0 #1a1216, 0 2px 0 #1a1216, -2px 0 0 #1a1216, 2px 0 0 #1a1216; }
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: var(--ink); font-family: Inter, system-ui, sans-serif; user-select: none; }
   canvas#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  [hidden] { display: none !important; }
   .layer { position: fixed; inset: 0; pointer-events: none; }
   #hud.hidden > :not(.always) { opacity: 0 !important; }
   #vignette, #flash { position: fixed; inset: 0; pointer-events: none; }
@@ -27,15 +29,32 @@
   #hp .bar { height: 14px; background: rgba(26,18,22,.6); border: 2px solid #1a1216; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 0 rgba(0,0,0,.4); }
   #hp-fill { height: 100%; width: 100%; background: linear-gradient(180deg, #8affb0, #36c46a); transition: width .15s; }
   #hp.low #hp-fill { background: linear-gradient(180deg, #ff8a7a, #d8303a); }
-  #objective { position: fixed; left: 24px; top: 46px; max-width: 42vw; font: 800 15px 'Baloo 2', Inter; text-shadow: var(--shadow); transition: opacity .4s; }
+  #quest { position: fixed; left: 20px; top: 44px; max-width: min(420px, 44vw); padding: 8px 14px 10px; background: rgba(20,16,24,.62); border: 2px solid #1a1216; border-left: 5px solid var(--gold); border-radius: 10px; transition: opacity .4s; }
+  #quest.nudge { animation: nudge 1.2s ease-in-out 3; }
+  @keyframes nudge { 50% { border-left-color: #fff; box-shadow: 0 0 0 4px rgba(255,210,122,.5); } }
+  #chapter-label { font: 800 10px Inter; letter-spacing: .25em; color: var(--gold); text-transform: uppercase; }
+  #objective { font: 800 19px/1.2 'Baloo 2', Inter; margin-top: 2px; }
   #objective::before { content: "\25C6  "; color: var(--gold); }
+  #why { font: 600 13px/1.35 Inter; color: #e8dcc8; margin-top: 3px; }
+  #toast { position: fixed; right: 20px; top: 20px; text-align: right; opacity: 0; pointer-events: none; padding: 6px 18px 8px; background: rgba(20,16,24,.7); border: 2px solid #1a1216; border-bottom: 3px solid var(--gold); border-radius: 10px; max-width: min(460px, 42vw); }
+  #toast small { display: block; font: 800 12px Inter; letter-spacing: .35em; color: var(--gold); text-shadow: var(--shadow); }
+  #toast b { display: block; font: 800 clamp(18px, 2.2vw, 26px)/1.2 'Baloo 2', Inter; text-shadow: var(--shadow); }
+  #toast span { display: block; font: 600 15px Inter; text-shadow: var(--shadow); margin-top: 2px; }
+  #chapter { position: fixed; left: 0; right: 0; top: 24%; text-align: center; opacity: 0; pointer-events: none; padding: 14px 0 18px; background: linear-gradient(90deg, transparent, rgba(20,16,24,.6) 25%, rgba(20,16,24,.6) 75%, transparent); }
+  #chapter small { display: block; font: 800 14px Inter; letter-spacing: .5em; color: var(--gold); text-shadow: var(--shadow); }
+  #chapter b { display: block; font: 800 clamp(30px, 4.2vw, 52px)/1.1 'Baloo 2', Inter; text-shadow: var(--outline), 0 5px 0 #1a1216; }
+  #marks { position: fixed; inset: 0; pointer-events: none; }
+  .mark { position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--gold); border: 3px solid #1a1216; color: #1a1216; font: 900 20px/24px 'Baloo 2', Inter; text-align: center; box-shadow: 0 3px 0 #1a1216; animation: hop 1s ease-in-out infinite; }
+  @keyframes hop { 50% { translate: 0 -6px; } }
+  #mousehint { position: fixed; left: 50%; top: 6vh; transform: translateX(-50%); font: 800 14px 'Baloo 2'; padding: 4px 12px; background: rgba(20,16,24,.6); border-radius: 8px; text-shadow: var(--shadow); }
   #marker { position: fixed; left: 0; top: 0; text-align: center; font: 800 12px 'Baloo 2'; text-shadow: var(--shadow); }
   #marker::before { content: ""; display: block; width: 16px; height: 16px; margin: 0 auto 2px; background: var(--gold); border: 2px solid #1a1216; transform: rotate(45deg); animation: bob 1.2s ease-in-out infinite; }
   #marker.off::before { background: #fff; }
   @keyframes bob { 50% { translate: 0 -4px; } }
 
-  .banner { position: fixed; left: 50%; top: 32%; transform: translate(-50%, -50%); text-align: center; text-shadow: 0 4px 0 #1a1216, 0 0 20px rgba(0,0,0,.4); }
-  .banner b { display: block; font: 800 clamp(40px, 7vw, 88px) 'Baloo 2', Inter; letter-spacing: .04em; -webkit-text-stroke: 2px #1a1216; }
+  .banner { position: fixed; left: 50%; top: 32%; transform: translate(-50%, -50%); text-align: center; }
+  .banner small { text-shadow: var(--outline); }
+  .banner b { display: block; font: 800 clamp(40px, 7vw, 88px) 'Baloo 2', Inter; letter-spacing: .04em; text-shadow: var(--outline), 0 6px 0 #1a1216; }
   .banner small { display: block; font: 800 16px 'Baloo 2'; letter-spacing: .15em; text-transform: uppercase; }
   .banner.gold b { color: var(--gold); } .banner.red b { color: #ff6a5a; }
 
@@ -56,26 +75,27 @@
   .bubble { position: absolute; left: 0; top: 0; max-width: 300px; background: #fffaf0; color: #1a1216; border: 2.5px solid #1a1216; border-radius: 16px; padding: 7px 12px 8px; font: 700 15px/1.25 'Baloo 2', Inter; box-shadow: 0 4px 0 rgba(26,18,22,.35); }
   .bubble b { display: block; font: 800 10px Inter; letter-spacing: .2em; color: #b0402a; }
   .bubble::after { content: ""; position: absolute; left: 50%; bottom: -10px; width: 14px; height: 14px; background: #fffaf0; border-right: 2.5px solid #1a1216; border-bottom: 2.5px solid #1a1216; transform: translateX(-50%) rotate(45deg); }
-  #talk { position: fixed; left: 50%; bottom: 24vh; transform: translateX(-50%); font: 800 17px 'Baloo 2'; text-shadow: var(--shadow); }
+  #talk { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; background: #fffaf0; color: #1a1216; border: 3px solid #1a1216; border-radius: 999px; font: 800 18px 'Baloo 2', Inter; box-shadow: 0 4px 0 #1a1216; white-space: nowrap; }
+  #talk kbd { font: 900 22px/1 Inter; min-width: 34px; padding: 6px 8px; background: var(--gold); border: 2px solid #1a1216; box-shadow: 0 3px 0 #1a1216; animation: pop 1s ease-in-out infinite; }
   #keys { position: fixed; left: 50%; bottom: 30vh; transform: translateX(-50%); font: 800 20px 'Baloo 2'; text-shadow: var(--shadow); animation: pop 1.4s ease-in-out infinite; }
   #keys kbd { font-size: 20px; padding: 6px 12px; } #keys span { margin-left: .6em; }
   @keyframes pop { 50% { scale: 1.06; } }
 
   #nums { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
-  .num { position: absolute; left: 0; top: 0; font: 800 24px 'Baloo 2', Inter; color: #fff; -webkit-text-stroke: 1.5px #1a1216; text-shadow: 0 3px 0 #1a1216; white-space: nowrap; }
+  .num { position: absolute; left: 0; top: 0; font: 800 24px 'Baloo 2', Inter; color: #fff; text-shadow: var(--outline), 0 4px 0 #1a1216; white-space: nowrap; }
   .num.big { font-size: 32px; color: var(--gold); }
   .num.hurt { color: var(--blood); } .num.heal { color: #8affb0; }
   .num.block { color: var(--aura); font-size: 18px; letter-spacing: .1em; }
-  .num.zero { font: 900 60px Cinzel, serif; color: #b9b3c4; -webkit-text-stroke: 0; text-shadow: 0 3px 0 #000, 0 0 18px rgba(190,170,255,.6); }
+  .num.zero { font: 900 60px Cinzel, serif; color: #b9b3c4; text-shadow: 0 3px 0 #000, 0 0 18px rgba(190,170,255,.6); }
 
   #help { position: fixed; right: 20px; bottom: 18px; font: 600 12px/2.1 Inter; text-align: right; text-shadow: var(--shadow); transition: opacity .6s; }
   #help kbd { font-size: 11px; padding: 1px 6px; }
-  #hud[data-mute="1"]::after { content: "MUTED (M)"; position: fixed; right: 24px; top: 22px; font: 700 11px Inter; letter-spacing: .2em; opacity: .7; }
+  #hud[data-mute="1"]::after { content: "MUTED (M)"; position: fixed; right: 24px; bottom: 78px; font: 700 11px Inter; letter-spacing: .2em; opacity: .7; }
 
   .screen { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none; }
   .screen[hidden] { display: none; }
   #title { background: radial-gradient(ellipse at center, rgba(0,0,0,0), rgba(20,30,60,.45)); }
-  #title h1 { margin: 0; font: 800 clamp(64px, 12vw, 160px)/1 'Baloo 2', Inter; letter-spacing: .04em; color: #fff8ec; -webkit-text-stroke: 3px #1a1216; text-shadow: 0 8px 0 #1a1216, 0 0 40px rgba(0,0,0,.35); }
+  #title h1 { margin: 0; font: 800 clamp(64px, 12vw, 160px)/1 'Baloo 2', Inter; letter-spacing: .04em; color: #fff8ec; text-shadow: -4px -4px 0 #1a1216, 4px -4px 0 #1a1216, -4px 4px 0 #1a1216, 4px 4px 0 #1a1216, 0 -4px 0 #1a1216, 0 4px 0 #1a1216, -4px 0 0 #1a1216, 4px 0 0 #1a1216, 0 10px 0 #1a1216, 0 0 40px rgba(0,0,0,.35); }
   #title .tag { margin-top: .6em; font: 800 20px 'Baloo 2'; text-shadow: var(--shadow); }
   #title .start { margin-top: 2em; font: 800 18px 'Baloo 2'; letter-spacing: .2em; text-shadow: var(--shadow); animation: pop 1.6s infinite; }
   #title .keys { margin-top: 2.2em; font: 700 14px/2.4 'Baloo 2'; text-shadow: var(--shadow); }
@@ -94,7 +114,11 @@
 <div id="hud" class="layer hidden">
   <div id="vignette" class="always"></div>
   <div id="hp"><div class="bar"><div id="hp-fill"></div></div></div>
-  <div id="objective"></div>
+  <div id="quest"><div id="chapter-label"></div><div id="objective"></div><div id="why"></div></div>
+  <div id="marks"></div>
+  <div id="toast"></div>
+  <div id="chapter"></div>
+  <div id="mousehint" hidden>Click the game to look around with the mouse</div>
   <div id="marker" hidden><span id="marker-dist"></span></div>
   <div id="banner" class="banner" hidden></div>
   <div id="boss"><div id="boss-name"></div><div class="bar"><div id="boss-fill"></div></div></div>
@@ -103,7 +127,7 @@
   <div id="talk" hidden></div>
   <div id="keys" hidden></div>
   <div id="line"><div id="line-who"></div><div id="line-text"></div></div>
-  <div id="help"><kbd>WASD</kbd> move &nbsp; <kbd>J</kbd> strike &nbsp; <kbd>K</kbd> guard &nbsp; <kbd>E</kbd> talk<br><kbd>&larr;</kbd><kbd>&rarr;</kbd> or click + mouse to look &nbsp; <kbd>Esc</kbd> pause &nbsp; <kbd>M</kbd> mute</div>
+  <div id="help"><kbd>WASD</kbd> move &nbsp; <kbd>J</kbd> strike &nbsp; <kbd>K</kbd> guard &nbsp; <kbd>E</kbd> talk<br>mouse or <kbd>&larr;</kbd><kbd>&rarr;</kbd> to look &nbsp; <kbd>Esc</kbd> pause &nbsp; <kbd>M</kbd> mute</div>
   <div id="lb-top" class="lb always"></div><div id="lb-bot" class="lb always"></div>
   <div id="flash" class="always"></div>
 </div>
