@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tidewell</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Baloo+2:wght@600;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<style>
+  :root { --ink: #fff8ec; --gold: #ffd27a; --blood: #ff4a4a; --aura: #6ff3ff; --shadow: 0 2px 0 #1a1216, 0 0 10px rgba(0,0,0,.5); }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: var(--ink); font-family: Inter, system-ui, sans-serif; user-select: none; }
+  canvas#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  .layer { position: fixed; inset: 0; pointer-events: none; }
+  #hud.hidden > :not(.always) { opacity: 0 !important; }
+  #vignette, #flash { position: fixed; inset: 0; pointer-events: none; }
+  #flash { background: #fff; opacity: 0; }
+  .lb { position: fixed; left: 0; right: 0; height: 0; background: #000; pointer-events: none; }
+  #lb-top { top: 0; } #lb-bot { bottom: 0; }
+  kbd { display: inline-block; min-width: 1.4em; text-align: center; font: 800 13px Inter; color: #1a1216; background: #fff8ec; border-radius: 6px; padding: 3px 7px; box-shadow: 0 3px 0 #1a1216; }
+
+  #hp { position: fixed; left: 24px; top: 20px; width: min(300px, 40vw); transition: opacity .4s; }
+  #hp .bar { height: 14px; background: rgba(26,18,22,.6); border: 2px solid #1a1216; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 0 rgba(0,0,0,.4); }
+  #hp-fill { height: 100%; width: 100%; background: linear-gradient(180deg, #8affb0, #36c46a); transition: width .15s; }
+  #hp.low #hp-fill { background: linear-gradient(180deg, #ff8a7a, #d8303a); }
+  #objective { position: fixed; left: 24px; top: 46px; max-width: 42vw; font: 800 15px 'Baloo 2', Inter; text-shadow: var(--shadow); transition: opacity .4s; }
+  #objective::before { content: "\25C6  "; color: var(--gold); }
+  #marker { position: fixed; left: 0; top: 0; text-align: center; font: 800 12px 'Baloo 2'; text-shadow: var(--shadow); }
+  #marker::before { content: ""; display: block; width: 16px; height: 16px; margin: 0 auto 2px; background: var(--gold); border: 2px solid #1a1216; transform: rotate(45deg); animation: bob 1.2s ease-in-out infinite; }
+  #marker.off::before { background: #fff; }
+  @keyframes bob { 50% { translate: 0 -4px; } }
+
+  .banner { position: fixed; left: 50%; top: 32%; transform: translate(-50%, -50%); text-align: center; text-shadow: 0 4px 0 #1a1216, 0 0 20px rgba(0,0,0,.4); }
+  .banner b { display: block; font: 800 clamp(40px, 7vw, 88px) 'Baloo 2', Inter; letter-spacing: .04em; -webkit-text-stroke: 2px #1a1216; }
+  .banner small { display: block; font: 800 16px 'Baloo 2'; letter-spacing: .15em; text-transform: uppercase; }
+  .banner.gold b { color: var(--gold); } .banner.red b { color: #ff6a5a; }
+
+  #boss { position: fixed; left: 50%; bottom: 4vh; width: min(620px, 70vw); transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity .6s; }
+  #boss-name { font: 800 20px 'Baloo 2'; letter-spacing: .12em; color: #fff; text-shadow: var(--shadow); }
+  #boss-name small { font: 800 11px Inter; letter-spacing: .3em; color: #e8d8c0; margin-left: .7em; }
+  #boss .bar { margin-top: 4px; height: 12px; background: rgba(26,18,22,.6); border: 2px solid #1a1216; border-radius: 6px; overflow: hidden; }
+  #boss-fill { height: 100%; background: linear-gradient(180deg, #ff9a5a, #d8402a); transition: width .2s; }
+  #boss.vehl #boss-name { font: 700 22px Cinzel, serif; color: var(--gold); letter-spacing: .3em; }
+  #boss.vehl .bar { border-color: rgba(243,212,138,.7); border-radius: 0; } #boss.vehl #boss-fill { background: linear-gradient(90deg, #4a1420, #8e1b2a 40%, #c22a3a); }
+
+  #line { position: fixed; left: 50%; bottom: 13vh; transform: translateX(-50%); width: min(900px, 86vw); text-align: center; opacity: 0; text-shadow: 0 2px 8px #000, 0 0 2px #000; }
+  #line-who { font: 800 12px Inter; letter-spacing: .3em; color: #e8d8c0; }
+  #line-text { font: 800 clamp(18px, 2.3vw, 28px) 'Baloo 2', Inter; margin-top: 2px; }
+  #line.vehl #line-who { color: var(--gold); }
+  #line.vehl #line-text { font: 700 clamp(22px, 3vw, 38px) Cinzel, serif; color: #fff7e6; letter-spacing: .04em; }
+  #bubbles { position: fixed; inset: 0; pointer-events: none; }
+  .bubble { position: absolute; left: 0; top: 0; max-width: 300px; background: #fffaf0; color: #1a1216; border: 2.5px solid #1a1216; border-radius: 16px; padding: 7px 12px 8px; font: 700 15px/1.25 'Baloo 2', Inter; box-shadow: 0 4px 0 rgba(26,18,22,.35); }
+  .bubble b { display: block; font: 800 10px Inter; letter-spacing: .2em; color: #b0402a; }
+  .bubble::after { content: ""; position: absolute; left: 50%; bottom: -10px; width: 14px; height: 14px; background: #fffaf0; border-right: 2.5px solid #1a1216; border-bottom: 2.5px solid #1a1216; transform: translateX(-50%) rotate(45deg); }
+  #talk { position: fixed; left: 50%; bottom: 24vh; transform: translateX(-50%); font: 800 17px 'Baloo 2'; text-shadow: var(--shadow); }
+  #keys { position: fixed; left: 50%; bottom: 30vh; transform: translateX(-50%); font: 800 20px 'Baloo 2'; text-shadow: var(--shadow); animation: pop 1.4s ease-in-out infinite; }
+  #keys kbd { font-size: 20px; padding: 6px 12px; } #keys span { margin-left: .6em; }
+  @keyframes pop { 50% { scale: 1.06; } }
+
+  #nums { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .num { position: absolute; left: 0; top: 0; font: 800 24px 'Baloo 2', Inter; color: #fff; -webkit-text-stroke: 1.5px #1a1216; text-shadow: 0 3px 0 #1a1216; white-space: nowrap; }
+  .num.big { font-size: 32px; color: var(--gold); }
+  .num.hurt { color: var(--blood); } .num.heal { color: #8affb0; }
+  .num.block { color: var(--aura); font-size: 18px; letter-spacing: .1em; }
+  .num.zero { font: 900 60px Cinzel, serif; color: #b9b3c4; -webkit-text-stroke: 0; text-shadow: 0 3px 0 #000, 0 0 18px rgba(190,170,255,.6); }
+
+  #help { position: fixed; right: 20px; bottom: 18px; font: 600 12px/2.1 Inter; text-align: right; text-shadow: var(--shadow); transition: opacity .6s; }
+  #help kbd { font-size: 11px; padding: 1px 6px; }
+  #hud[data-mute="1"]::after { content: "MUTED (M)"; position: fixed; right: 24px; top: 22px; font: 700 11px Inter; letter-spacing: .2em; opacity: .7; }
+
+  .screen { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none; }
+  .screen[hidden] { display: none; }
+  #title { background: radial-gradient(ellipse at center, rgba(0,0,0,0), rgba(20,30,60,.45)); }
+  #title h1 { margin: 0; font: 800 clamp(64px, 12vw, 160px)/1 'Baloo 2', Inter; letter-spacing: .04em; color: #fff8ec; -webkit-text-stroke: 3px #1a1216; text-shadow: 0 8px 0 #1a1216, 0 0 40px rgba(0,0,0,.35); }
+  #title .tag { margin-top: .6em; font: 800 20px 'Baloo 2'; text-shadow: var(--shadow); }
+  #title .start { margin-top: 2em; font: 800 18px 'Baloo 2'; letter-spacing: .2em; text-shadow: var(--shadow); animation: pop 1.6s infinite; }
+  #title .keys { margin-top: 2.2em; font: 700 14px/2.4 'Baloo 2'; text-shadow: var(--shadow); }
+  #pause { background: rgba(10,14,30,.55); font: 800 52px 'Baloo 2'; letter-spacing: .1em; text-shadow: var(--shadow); }
+  #pause small { display: block; font: 700 15px Inter; letter-spacing: .15em; margin-top: .6em; }
+  #card { background: rgba(0,0,0,.74); }
+  #card h1 { font: 900 clamp(40px, 7vw, 92px) Cinzel, serif; letter-spacing: .12em; margin: 0 0 .5em; }
+  #card dl { display: grid; grid-template-columns: auto auto; gap: .45em 1.6em; justify-content: center; margin: 1.6em 0; font: 600 16px Inter; }
+  #card dt { text-align: right; opacity: .75; } #card dd { margin: 0; text-align: left; font-weight: 800; }
+  #card dd.zero { color: #b9b3c4; font: 900 22px Cinzel, serif; }
+  #card .key { margin-top: 2em; font: 800 14px Inter; letter-spacing: .3em; animation: pop 1.6s infinite; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="hud" class="layer hidden">
+  <div id="vignette" class="always"></div>
+  <div id="hp"><div class="bar"><div id="hp-fill"></div></div></div>
+  <div id="objective"></div>
+  <div id="marker" hidden><span id="marker-dist"></span></div>
+  <div id="banner" class="banner" hidden></div>
+  <div id="boss"><div id="boss-name"></div><div class="bar"><div id="boss-fill"></div></div></div>
+  <div id="bubbles"></div>
+  <div id="nums"></div>
+  <div id="talk" hidden></div>
+  <div id="keys" hidden></div>
+  <div id="line"><div id="line-who"></div><div id="line-text"></div></div>
+  <div id="help"><kbd>WASD</kbd> move &nbsp; <kbd>J</kbd> strike &nbsp; <kbd>K</kbd> guard &nbsp; <kbd>E</kbd> talk<br><kbd>&larr;</kbd><kbd>&rarr;</kbd> or click + mouse to look &nbsp; <kbd>Esc</kbd> pause &nbsp; <kbd>M</kbd> mute</div>
+  <div id="lb-top" class="lb always"></div><div id="lb-bot" class="lb always"></div>
+  <div id="flash" class="always"></div>
+</div>
+<div id="title" class="screen">
+  <div>
+    <h1 id="title-name"></h1>
+    <div class="tag" id="title-tag"></div>
+    <div class="start">PRESS ENTER</div>
+    <div class="keys"><kbd>WASD</kbd> move &nbsp; <kbd>J</kbd> strike &nbsp; <kbd>K</kbd> guard &nbsp; <kbd>E</kbd> talk &nbsp; or a controller</div>
+  </div>
+</div>
+<div id="pause" class="screen" hidden><div>PAUSED<small>Enter or Esc to resume</small></div></div>
+<div id="card" class="screen" hidden><div id="card-body"></div></div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+#!/bin/sh
+# Runs before every commit. Turned on automatically by `npm install` (or `npm run setup`).
+# Skip only in an emergency with `git commit --no-verify` - CI on GitHub runs the same checks anyway.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+echo "pre-commit: unit + intent tests"
+npm test --silent || { printf '\nTests failed - commit aborted.\n'; exit 1; }
+
+if [ -d node_modules/playwright-core ]; then
+  echo "pre-commit: browser smoke test"
+  npm run smoke --silent || { printf '\nBrowser smoke test failed - commit aborted (screenshots in test-results/).\n'; exit 1; }
+else
+  echo "pre-commit: skipping browser smoke test - run 'npm install' to enable it"
+fi
