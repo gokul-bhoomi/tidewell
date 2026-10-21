@@ -9,7 +9,8 @@ const NAMES = Object.fromEntries(NPCS.map((n) => [n.id, n.name]));
 
 export function createHud(view) {
   const el = {
-    hud: $('hud'), hp: $('hp-fill'), hpBox: $('hp'), objective: $('objective'), marker: $('marker'), markerDist: $('marker-dist'),
+    hud: $('hud'), hp: $('hp-fill'), hpBox: $('hp'), quest: $('quest'), chapterLabel: $('chapter-label'), objective: $('objective'), why: $('why'), marker: $('marker'), markerDist: $('marker-dist'),
+    toast: $('toast'), chapter: $('chapter'), marks: $('marks'), mouseHint: $('mousehint'),
     banner: $('banner'), boss: $('boss'), bossName: $('boss-name'), bossBar: $('boss-fill'),
     line: $('line'), who: $('line-who'), text: $('line-text'), bubbles: $('bubbles'), nums: $('nums'), talk: $('talk'), keys: $('keys'),
     flash: $('flash'), vignette: $('vignette'), lbTop: $('lb-top'), lbBot: $('lb-bot'),
@@ -18,6 +19,8 @@ export function createHud(view) {
   $('title-name').textContent = GAME_TITLE;
   $('title-tag').textContent = GAME_TAGLINE;
   let line = null, banner = null, flash = 0, lb = 0, bossShake = 0, card = null, t = 0;
+  let toast = null, chapter = null, stuckT = 0, lastObj = '', lastDist = Infinity;
+  const marks = [];
   const nums = [], bubbles = new Map(); // npc id -> { el, t, dur }
 
   function number(text, cls, x, y, z) {
@@ -51,6 +54,8 @@ export function createHud(view) {
       case 'land': flash = Math.max(flash, 0.35); break;
       case 'shock': flash = 1; break;
       case 'card': card = e.card; break;
+      case 'objective': toast = { text: e.text, why: e.why, t: 0, dur: 3.2 }; break;
+      case 'chapter': chapter = { n: e.n, title: e.title, t: 0, dur: 3.6 }; break;
       case 'phase': if (e.phase === 'intro' || e.prev === 'fallen') { card = null; line = null; } break;
     }
   }
@@ -59,6 +64,12 @@ export function createHud(view) {
     t += dt;
     if (line && (line.t += dt) > line.dur + 0.4) line = null;
     if (banner && (banner.t += dt) > banner.dur) banner = null;
+    if (toast && !chapter && (toast.t += dt) > toast.dur) toast = null; // wait for the chapter card
+    if (chapter && (chapter.t += dt) > chapter.dur) chapter = null;
+    // nudge the quest card when the player seems lost: same objective, not getting closer
+    const o = g.objective, key = o?.text || '';
+    const tgt = o && o.x != null ? Math.hypot(g.player.x - o.x, g.player.z - o.z) : null;
+    if (key !== lastObj || (tgt != null && tgt < lastDist - 2)) { stuckT = 0; lastObj = key; lastDist = tgt ?? Infinity; } else stuckT += dt;
     for (const [id, b] of bubbles) if ((b.t += dt) > b.dur + 0.3) { b.el.remove(); bubbles.delete(id); }
     for (const n of nums) n.t += dt;
     while (nums.length && nums[0].t > 1.1) nums.shift().d.remove();
@@ -79,33 +90,60 @@ export function createHud(view) {
     el.hpBox.classList.toggle('low', p.hp < 30);
     el.hpBox.style.opacity = playing && g.phase !== 'end' ? 1 - lb : 0;
 
-    // objective + marker
+    // quest card + marker
     const o = g.objective;
     let otext = o?.text || '';
     if (o?.kind === 'talkAny') otext += ` (${Math.min(o.done, o.count)}/${o.count})`;
     el.objective.textContent = otext;
-    el.objective.style.opacity = otext && lb < 0.5 ? 1 : 0;
+    el.why.textContent = o?.why || '';
+    el.chapterLabel.textContent = g.chapter ? `Chapter ${g.chapter.n} \u00b7 ${g.chapter.title}` : '';
+    el.quest.style.opacity = otext && lb < 0.5 ? 1 : 0;
+    el.quest.classList.toggle('nudge', stuckT > 25);
+    if (stuckT > 28) stuckT = 0;
+
+    // who still has something to say: ! over them, and the marker points at the nearest
+    const want = (o?.kind === 'talkAny' ? g.npcs.filter((n) => !g.talked.has(n.id) && !n.down).map((n) => n.id) : o?.kind === 'talk' ? [o.npc] : []);
     let target = null;
-    if (o?.kind === 'talk') target = view.anchor(o.npc);
-    else if (o && o.x != null && !(o.kind === 'fight' && g.foes.some((f) => f.type !== 'dummy' && f.state !== 'idle' && f.state !== 'dead'))) target = { x: o.x, y: 2.5, z: o.z };
+    if (want.length) {
+      const near = want.map((id) => g.npcs.find((n) => n.id === id)).reduce((a, b) => (Math.hypot(a.x - p.x, a.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? a : b));
+      target = view.anchor(near.id);
+    } else if (o && o.x != null && !(o.kind === 'fight' && g.foes.some((f) => f.type !== 'dummy' && f.state !== 'idle' && f.state !== 'dead'))) target = { x: o.x, y: 2.5, z: o.z };
     if (o?.kind === 'go' && Math.hypot(p.x - o.x, p.z - o.z) < (o.r || 3)) target = null;
+    while (marks.length < want.length) { const m = document.createElement('div'); m.className = 'mark'; m.textContent = '!'; el.marks.appendChild(m); marks.push(m); }
+    marks.forEach((m, i) => {
+      const id = want[i], a = id && id !== g.near && view.anchor(id), s = a && view.project(a.x, a.y + 0.55, a.z);
+      const show = playing && s && s.visible && lb < 0.5;
+      m.style.display = show ? '' : 'none';
+      if (show) m.style.transform = `translate(${s.x}px, ${s.y}px) translate(-50%, -100%) scale(${Math.max(0.6, Math.min(1.2, 14 / Math.max(1, Math.hypot(a.x - p.x, a.z - p.z))))})`;
+    });
     if (target && lb < 0.5) {
       const s = view.project(target.x, target.y + 0.5, target.z);
       const W = innerWidth, H = innerHeight, m = 40;
       let x = s.x, y = s.y, off = !s.visible || x < m || x > W - m || y < m || y > H - m;
       if (!s.visible) { x = W - x; y = H - m; }
       x = Math.max(m, Math.min(W - m, x)); y = Math.max(m, Math.min(H - m, y));
-      el.marker.hidden = false;
+      el.marker.hidden = want.length > 0 && !off; // on screen, the ! already shows where to go
       el.marker.classList.toggle('off', off);
       el.marker.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
       el.markerDist.textContent = `${Math.round(Math.hypot(p.x - target.x, p.z - target.z))}m`;
     } else el.marker.hidden = true;
 
-    // talk prompt and tutorial keys
-    el.talk.hidden = !(playing && g.near && !paused);
-    if (g.near) el.talk.innerHTML = `<kbd>E</kbd> Talk to <b>${NAMES[g.near]}</b>`;
+    // the talk prompt floats above the villager you are next to
+    const ta = g.near && view.anchor(g.near), ts = ta && view.project(ta.x, ta.y - (ta.y > 1.8 ? 1.05 : 0.7), ta.z); // chest height, under their speech bubble
+    el.talk.hidden = !(playing && g.near && !paused && ts?.visible);
+    if (!el.talk.hidden) {
+      el.talk.innerHTML = `<kbd>E</kbd> Talk to ${NAMES[g.near]}`;
+      el.talk.style.transform = `translate(${ts.x}px, ${ts.y}px) translate(-50%, -50%)`;
+    }
     el.keys.hidden = !g.prompt;
     if (g.prompt) el.keys.innerHTML = `${g.prompt.keys.map((k) => `<kbd>${k}</kbd>`).join(' ')}<span>${g.prompt.text}</span>`;
+
+    // popups
+    el.toast.style.opacity = toast && !chapter && lb < 0.5 ? Math.min(1, toast.t * 5, (toast.dur - toast.t) * 3) : 0;
+    if (toast) el.toast.innerHTML = `<small>NEW OBJECTIVE</small><b>${toast.text}</b>`;
+    el.chapter.style.opacity = chapter ? Math.min(1, chapter.t * 2, (chapter.dur - chapter.t) * 2) : 0;
+    if (chapter) el.chapter.innerHTML = `<small>CHAPTER ${chapter.n}</small><b>${chapter.title}</b>`;
+    el.mouseHint.hidden = !(playing && !paused && !document.pointerLockElement && !card && !toast && lb < 0.5 && !('ontouchstart' in window));
 
     el.banner.hidden = !banner;
     if (banner) {
@@ -167,7 +205,8 @@ export function createHud(view) {
     info: () => ({
       line: line && `${line.who}: ${line.text}`, bubbles: [...bubbles.entries()].map(([id, b]) => `${id}: ${b.el.textContent}`),
       banner: banner?.text || null, card, letterbox: Math.round(lb * 100) / 100, flash: Math.round(flash * 100) / 100, numbers: nums.map((n) => n.d.textContent),
-      objective: el.objective.textContent, marker: !el.marker.hidden, talk: el.talk.hidden ? null : el.talk.textContent, keys: el.keys.hidden ? null : el.keys.textContent,
+      objective: el.objective.textContent, why: el.why.textContent, chapter: el.chapterLabel.textContent, marker: !el.marker.hidden, talk: el.talk.hidden ? null : el.talk.textContent, keys: el.keys.hidden ? null : el.keys.textContent,
+      toast: toast?.text || null, chapterCard: chapter ? `${chapter.n}: ${chapter.title}` : null, marks: marks.filter((m) => m.style.display !== 'none').length, mouseHint: !el.mouseHint.hidden,
     }),
   };
 }

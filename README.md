@@ -22,7 +22,7 @@ Then open **http://localhost:5174** in Chrome, Edge or Firefox. Press any key on
 | Strike (keep pressing for a 3-hit combo) | J, Space or left click | A or X |
 | Guard (blocks hits from the front) | K, Shift or right click | B, LB, RB or LT |
 | Talk | E | Y |
-| Turn the camera | Left / Right arrows, or click to lock the mouse | Right stick |
+| Look around | Mouse (captured when you start; click if it isn't), or Left / Right arrows | Right stick |
 | Pause | Esc or P | Start |
 | Mute / fullscreen | M / F | |
 

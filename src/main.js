@@ -18,8 +18,9 @@ const hud = createHud(view);
 const S = {
   screen: 'title', paused: false, errors: [],
   g: createGame(+qs.get('seed') || 1),
-  cam: { yaw: Math.PI, idle: 0 }, // camera looks along (sin yaw, cos yaw)
-  ctl: { mx: 0, my: 0, cam: 0, padCam: 0, mouseDX: 0, strike: false, guard: false, talk: false },
+  cam: { yaw: Math.PI, pitch: 0, idle: 0 }, // camera looks along (sin yaw, cos yaw); pitch > 0 = higher, looking down more
+  ctl: { mx: 0, my: 0, cam: 0, padCam: 0, padPitch: 0, mouseDX: 0, mouseDY: 0, strike: false, guard: false, talk: false },
+  lockLostAt: -1e9,
 };
 const DBG = { paused: false, override: null, actions: [] };
 
@@ -28,7 +29,9 @@ function start(o = {}) {
   S.cam.yaw = Math.PI;
   view.reset();
   hud.onEvent({ type: 'phase', phase: 'intro' }, S.g);
+  if (!o.phase || o.phase === 'intro') dispatch(S.g.events); // the new game's first events (chapter 1)
   S.screen = 'game'; S.paused = false;
+  input.lockMouse(); // the mouse steers the camera from the start
   if (o.phase && o.phase !== 'intro') dispatch(skipTo(S.g, o.phase).events);
   audio.setMode(S.g.music);
 }
@@ -53,7 +56,7 @@ function update(dt) {
     const F = [Math.sin(S.cam.yaw), Math.cos(S.cam.yaw)], R = [-Math.cos(S.cam.yaw), Math.sin(S.cam.yaw)];
     inp = { mx: R[0] * c.mx + F[0] * c.my, mz: R[1] * c.mx + F[1] * c.my, strike: c.strike, guard: c.guard, talk: c.talk };
   }
-  c.strike = false; c.mouseDX = 0;
+  c.strike = false; c.mouseDX = 0; c.mouseDY = 0;
   stepGame(g, inp, dt);
   dispatch(g.events);
   if (g.music !== audio.mode) audio.setMode(g.music);
@@ -64,8 +67,10 @@ function update(dt) {
 function steerCamera(g, c, dt) {
   const p = g.player, v = g.villain;
   const turn = c.cam * CAM.keyTurn * dt + c.padCam * CAM.padTurn * dt + c.mouseDX * CAM.mouseTurn;
-  if (Math.abs(turn) > 1e-5) S.cam.idle = 0; else S.cam.idle += dt;
+  const tilt = c.mouseDY * CAM.mousePitch + c.padPitch * CAM.padPitch * dt;
+  if (Math.abs(turn) > 1e-5 || Math.abs(tilt) > 1e-5) S.cam.idle = 0; else S.cam.idle += dt;
   S.cam.yaw += turn;
+  S.cam.pitch = Math.max(CAM.pitchMin, Math.min(CAM.pitchMax, S.cam.pitch + tilt));
   const ease = (target, k) => { S.cam.yaw += Math.atan2(Math.sin(target - S.cam.yaw), Math.cos(target - S.cam.yaw)) * (1 - Math.exp(-k * dt)); };
   // story moments lock the camera onto him: you, then him, filling the screen
   const locked = v && v.state !== 'hidden' && ['arrival', 'defiance', 'judgement'].includes(g.phase) && !p.blasted;
@@ -85,8 +90,13 @@ function action(a) {
   if (a === 'mute') return audio.toggleMute();
   if (a === 'fullscreen') return document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.().catch(() => {});
   if (S.screen === 'title') { if (a === 'confirm') start(); return; }
-  if (a === 'pause' && !['end', 'fallen'].includes(S.g.phase)) { S.paused = !S.paused; if (S.paused) document.exitPointerLock?.(); return; }
-  if (a === 'confirm' && S.paused) { S.paused = false; return; }
+  if (a === 'pause' && !['end', 'fallen'].includes(S.g.phase)) {
+    if (performance.now() - S.lockLostAt < 400) return; // this Esc already released the mouse and paused
+    S.paused = !S.paused;
+    if (S.paused) document.exitPointerLock?.(); else input.lockMouse();
+    return;
+  }
+  if (a === 'confirm' && S.paused) { S.paused = false; input.lockMouse(); return; }
   if (a === 'confirm' && S.g.phase === 'end') start();
   if (a === 'confirm' && S.g.phase === 'fallen') { retryFight(S.g); dispatch(S.g.events); }
 }
@@ -95,7 +105,7 @@ function action(a) {
 addEventListener('keydown', () => audio.unlock());
 addEventListener('pointerdown', () => audio.unlock());
 canvas.addEventListener('click', () => { if (S.screen === 'game' && !S.paused) input.lockMouse(); });
-document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && S.screen === 'game' && !['end', 'fallen'].includes(S.g.phase)) S.paused = true; });
+document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && S.screen === 'game' && !['end', 'fallen'].includes(S.g.phase)) { S.paused = true; S.lockLostAt = performance.now(); } });
 addEventListener('resize', () => view.resize());
 addEventListener('error', (e) => S.errors.push(String(e.error?.stack || e.message)));
 
@@ -103,7 +113,7 @@ function readInput() {
   const i = input.poll();
   const c = S.ctl;
   c.mx = Math.max(-1, Math.min(1, i.mx)); c.my = Math.max(-1, Math.min(1, i.my));
-  c.cam = i.cam; c.padCam = i.padCam; c.mouseDX += i.mouseDX;
+  c.cam = i.cam; c.padCam = i.padCam; c.padPitch = i.padPitch; c.mouseDX += i.mouseDX; c.mouseDY += i.mouseDY;
   c.strike = c.strike || i.strike; c.guard = i.guard; c.talk = i.talk;
   for (const a of i.actions) action(a);
 }
@@ -126,11 +136,13 @@ window.__game = {
     skipTo(phase) { dispatch(skipTo(S.g, phase).events); },
     set(fields) { Object.assign(S.g.player, fields); },
     camYaw(y) { if (y != null) S.cam.yaw = y; return S.cam.yaw; },
+    camPitch(p) { if (p != null) S.cam.pitch = p; return S.cam.pitch; },
+    mouse(dx, dy) { S.ctl.mouseDX += dx; S.ctl.mouseDY += dy; }, // as if the captured mouse moved
     snapshot() {
       return {
         screen: S.screen, paused: S.paused, debugPaused: DBG.paused,
         audio: { running: audio.running, muted: audio.muted, music: audio.mode },
-        hud: hud.info(), view: view.info(), camYaw: Math.round(S.cam.yaw * 100) / 100,
+        hud: hud.info(), view: view.info(), camYaw: Math.round(S.cam.yaw * 100) / 100, camPitch: Math.round(S.cam.pitch * 100) / 100,
         game: snapshot(S.g),
       };
     },

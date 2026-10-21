@@ -2,7 +2,8 @@
 // between frames are latched so a quick tap is never lost.
 //
 // Keyboard: WASD move, J / Space / left click strike, K / Shift / right click guard, E talk,
-//           Left/Right arrows turn the camera (or click to lock the mouse and look around),
+//           the mouse looks around (captured when the game starts or on click; Esc releases it),
+//           Left/Right arrows also turn the camera,
 //           Enter / Space confirm, Esc / P pause, M mute.
 // Gamepad:  left stick move, right stick camera, A / X strike, B / LB / RB / LT guard, Y talk, Start pause.
 
@@ -11,7 +12,7 @@ const STRIKE_KEYS = ['KeyJ', 'Space'], GUARD_KEYS = ['KeyK', 'ShiftLeft', 'Shift
 export function createInput(canvas) {
   const down = new Set();
   const actions = [];
-  let strikeLatch = false, talkLatch = false, mouseDX = 0, mouseL = false, mouseR = false;
+  let strikeLatch = false, talkLatch = false, mouseDX = 0, mouseDY = 0, mouseL = false, mouseR = false;
   let padPrev = [];
 
   addEventListener('keydown', (e) => {
@@ -33,7 +34,7 @@ export function createInput(canvas) {
   });
   addEventListener('mouseup', (e) => { if (e.button === 0) mouseL = false; if (e.button === 2) mouseR = false; });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) mouseDX += e.movementX; });
+  addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) { mouseDX += e.movementX; mouseDY += e.movementY; } });
 
   const key = (...codes) => codes.some((c) => down.has(c));
 
@@ -44,7 +45,7 @@ export function createInput(canvas) {
     let talk = talkLatch || key('KeyE');
     let strike = strikeLatch || mouseL || key(...STRIKE_KEYS);
     let guard = mouseR || key(...GUARD_KEYS);
-    let padCam = 0;
+    let padCam = 0, padPitch = 0;
     const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
     pads.forEach((p, i) => {
       const b = (n) => !!p.buttons[n]?.pressed;
@@ -53,7 +54,7 @@ export function createInput(canvas) {
       const dz = (v) => (Math.abs(v) < 0.18 ? 0 : v);
       mx += dz(p.axes[0] || 0); my -= dz(p.axes[1] || 0);
       if (b(14)) mx -= 1; if (b(15)) mx += 1; if (b(12)) my += 1; if (b(13)) my -= 1;
-      padCam += dz(p.axes[2] || 0);
+      padCam += dz(p.axes[2] || 0); padPitch += dz(p.axes[3] || 0);
       if (b(0) || b(2)) strike = true;
       if (b(1) || b(4) || b(5) || b(6)) guard = true;
       if (b(3)) talk = true;
@@ -61,8 +62,8 @@ export function createInput(canvas) {
       if (pressed(9)) actions.push('pause');
       padPrev[i] = p.buttons.map((x) => x.pressed);
     });
-    const out = { mx, my, cam, padCam, mouseDX, strike, guard, talk, actions: actions.splice(0), pads: pads.length };
-    strikeLatch = false; talkLatch = false; mouseDX = 0;
+    const out = { mx, my, cam, padCam, padPitch, mouseDX, mouseDY, strike, guard, talk, actions: actions.splice(0), pads: pads.length };
+    strikeLatch = false; talkLatch = false; mouseDX = 0; mouseDY = 0;
     return out;
   }
 

@@ -57,9 +57,9 @@ export const VILLAIN = {
 
 // Phase lengths (s) for the phases that run on a timer.
 export const PHASE_LEN = {
-  intro: 13.5, praise: 7.5, festivalMax: 75, festivalAfterToast: 5.5, roamMax: 150, roam2Max: 35, roam3: 9,
+  intro: 14.2, praise: 7.5, festivalMax: 75, festivalAfterToast: 5.5, roamMax: 150, roam2Max: 35, roam3: 9,
   arrival: VILLAIN.descendAt + VILLAIN.descendTime, judgement: 7.5, aftermath: 14,
 };
 
 // Third-person camera: behind the character and a little above, looking slightly down.
-export const CAM = { dist: 6.2, height: 3.0, lookHeight: 1.3, lookAhead: 2.2, fov: 58, keyTurn: 2.4, padTurn: 3.2, mouseTurn: 0.0032, follow: 1.4 };
+export const CAM = { dist: 6.2, height: 3.0, lookHeight: 1.3, lookAhead: 2.2, fov: 58, keyTurn: 2.4, padTurn: 3.2, mouseTurn: 0.0032, mousePitch: 0.0026, padPitch: 1.6, pitchMin: -0.25, pitchMax: 0.75, follow: 1.4 };

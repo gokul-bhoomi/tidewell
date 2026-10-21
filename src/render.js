@@ -6,7 +6,7 @@ import { VILLAIN, CAM, STRIKE, FOES } from './config.js';
 import { BUILDINGS, STALLS } from './world.js';
 import { NPCS } from './script.js';
 import { rng } from './rng.js';
-import { makeCharacter, makeVillain, pose, poseVillain, setOpacity } from './characters.js';
+import { makeCharacter, makeVillain, pose, poseVillain, setOpacity, hitReact, squash } from './characters.js';
 import { buildVillage } from './village.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -230,7 +230,7 @@ export function createRenderer(canvas) {
     switch (e.type) {
       case 'hit': {
         glow.burst(e.finisher ? 26 : 14, prand, { x: e.x, y: 1.3, z: e.z, speed: e.finisher ? 9 : 6, life: 0.35, size: 0.25, size1: 0.05, color: e.finisher ? GOLD : WHITE, drag: 3 });
-        const f = foes.get(e.id); if (f) f.c.flash = 1;
+        const f = foes.get(e.id); if (f) hitReact(f.c, e.finisher ? 1.5 : 0.8);
         if (e.foe === 'dummy') dust.burst(6, prand, { x: e.x, y: 1.3, z: e.z, speed: 2, life: 0.8, size: 0.1, color: C(0xd9b860), grav: 4 });
         cam.shake = Math.max(cam.shake, e.finisher ? 0.45 : 0.22);
         break;
@@ -246,7 +246,7 @@ export function createRenderer(canvas) {
         break;
       case 'hurt': case 'tap':
         glow.burst(10, prand, { x: p.x, y: 1.2, z: p.z, speed: 4, life: 0.35, size: 0.2, size1: 0.02, color: e.type === 'tap' ? WHITE : BLOOD, drag: 3 });
-        hero.flash = e.type === 'tap' ? 0.4 : 1; cam.shake = Math.max(cam.shake, e.type === 'tap' ? 0.1 : 0.35);
+        hitReact(hero, e.type === 'tap' ? 0.5 : 1); if (e.type === 'tap') hero.flash = 0.4; cam.shake = Math.max(cam.shake, e.type === 'tap' ? 0.1 : 0.35);
         break;
       case 'slam':
         dust.burst(40, prand, { x: e.x, y: 0.3, z: e.z, speed: 7, life: 1.2, size: 0.8, size1: 2.4, color: EARTH, alpha: 0.6, drag: 2, up: 0.3 });
@@ -255,7 +255,7 @@ export function createRenderer(canvas) {
       case 'heroLand':
         dust.burst(50, prand, { x: e.x, y: 0.2, z: e.z, speed: 7, life: 1.4, size: 0.6, size1: 2, color: EARTH, alpha: 0.6, drag: 2.5, up: 0.25 });
         glow.burst(20, prand, { x: e.x, y: 0.3, z: e.z, speed: 6, life: 0.5, size: 0.2, size1: 0.02, color: GOLD, drag: 2 });
-        cam.shake = 0.7;
+        cam.shake = 0.7; squash(hero, 0.35);
         break;
       case 'victory': case 'cheers':
         for (let i = 0; i < (e.big || e.type === 'cheers' ? 160 : 70); i++) dust.emit({ x: p.x + (prand() - 0.5) * 14, y: 5 + prand() * 4, z: p.z + (prand() - 0.5) * 14, vx: (prand() - 0.5) * 2, vy: prand() * 2, vz: (prand() - 0.5) * 2, life: 4, size: 0.13, color: CONF[i % 5], grav: 1.6, drag: 1.2 });
@@ -326,7 +326,14 @@ export function createRenderer(canvas) {
     else if (p.act) { act = 'strike'; k = p.act.t / (STRIKE.windup + STRIKE.recovery); n = p.act.n; }
     else if (p.guard) act = 'guard';
     else if (p.flinch > 0) act = 'hurt';
-    pose(c, { speed: p.down ? 0 : p.speed, act, k, n, down: p.down, downT: p.downT }, dt);
+    // look at whoever matters: the nearest enemy, the villager you can talk to, or him
+    let look = null;
+    const v = g.villain;
+    if (v && v.state !== 'hidden' && v.state !== 'gone') look = v;
+    else if (g.fight) look = g.foes.filter((f) => f.type !== 'dummy' && f.state !== 'dead').reduce((a, f) => (!a || Math.hypot(f.x - p.x, f.z - p.z) < Math.hypot(a.x - p.x, a.z - p.z) ? f : a), null);
+    else if (g.near) look = g.npcs.find((n) => n.id === g.near);
+    if (look && Math.hypot(look.x - p.x, look.z - p.z) > 10 && look !== v) look = null;
+    pose(c, { speed: p.down ? 0 : p.speed, act, k, n, down: p.down, downT: p.downT, look }, dt);
     if (p.act && k < 0.6) {
       trail.position.set(p.x, 1.25, p.z); trail.rotation.set(Math.PI / 2, 0, -p.face + (n === 1 ? -0.3 : n === 2 ? time * 30 : Math.PI * 1.4));
       trail.material.opacity = (n === 2 ? 0.8 : 0.5) * (1 - k / 0.6); trail.scale.setScalar(n === 2 ? 1.25 : 1);
@@ -345,7 +352,9 @@ export function createRenderer(canvas) {
       c.root.rotation.y = n.face;
       let act = ['walk', 'idle', 'flee'].includes(n.act) ? null : n.act, k = 0;
       if (n.spar && n.spar.state === 'windup') { act = 'sparWindup'; k = 1 - Math.max(0, n.spar.st) / FOES.sparrer.windup; }
-      pose(c, { speed: n.down ? 0 : n.moving, act, k, down: n.down, downT: n.down ? 1 : 0 }, dt);
+      const v = g.villain, dp = Math.hypot(g.player.x - n.x, g.player.z - n.z);
+      const look = g.npcMode === 'freeze' && v ? v : dp < 7 ? g.player : null; // villagers notice you
+      pose(c, { speed: n.down ? 0 : n.moving, act, k, down: n.down, downT: n.down ? 1 : 0, look }, dt);
     }
   }
 
@@ -377,7 +386,7 @@ export function createRenderer(canvas) {
       if (e.state === 'recover') { act = 'swing'; k = 1 - Math.max(0, e.st) / T.recover; }
       if (e.state === 'stagger') act = 'stagger';
       const dead = e.state === 'dead';
-      pose(f.c, { speed: dead || e.state === 'windup' ? 0 : Math.min(speed, 8), act, k, down: dead, downT: dead ? -e.st : 0, flinch: e.flinch > 0, glow: e.state === 'windup' ? k * 0.55 : 0 }, dt);
+      pose(f.c, { speed: dead || e.state === 'windup' ? 0 : Math.min(speed, 8), act, k, down: dead, downT: dead ? -e.st : 0, flinch: e.flinch > 0, glow: e.state === 'windup' ? k * 0.55 : 0, look: dead ? null : g.player }, dt);
       if (dead) { const o = clamp(1 - (-e.st - 1.6) / 1.2, 0, 1); setOpacity(f.c, o); f.c.root.position.y = -Math.max(0, -e.st - 1.6) * 0.4; }
       // telegraph: a red ring under the attacker, or where the slam will land
       if (e.state === 'windup') {
@@ -473,9 +482,13 @@ export function createRenderer(canvas) {
       const a = time * 0.05;
       pos = V(Math.sin(a) * 30, 11, Math.cos(a) * 30); look = V(0, 2, 0); k = 2; collide = false;
     } else {
+      // orbit behind the hero; the mouse (pitch) raises or lowers the camera around them
       const pull = g.fight ? 1.25 : 1; // a wider view in fights
-      pos = head.clone().addScaledVector(F, -CAM.dist * pull).setY(CAM.height * pull + p.y * 0.3);
+      const dist = CAM.dist * pull, rise = CAM.height * pull - CAM.lookHeight, r = Math.hypot(dist, rise);
+      const el = clamp(Math.atan2(rise, dist) + (view.pitch || 0), 0.03, 1.25);
+      pos = head.clone().addScaledVector(F, -r * Math.cos(el)).setY(CAM.lookHeight + r * Math.sin(el) + p.y * 0.3);
       look = head.clone().addScaledVector(F, CAM.lookAhead);
+      look.y += Math.max(0, -(view.pitch || 0)) * 4; // looking up when the camera is low
       const vh = v && V(v.x, v.y + 2.3, v.z);
       if (g.phase === 'intro' && g.phaseT < 3) {
         // watching the hero drop in, from the plaza
@@ -499,8 +512,8 @@ export function createRenderer(canvas) {
         look = V(v.x, Math.min(v.y + 2, 14), v.z).lerp(V(p.x, 0.3, p.z), 0.25); k = 1.5; collide = false;
       }
     }
-    // don't let houses get between the camera and the hero: first try craning up over the roofs,
-    // and only if that is blocked too, pull in closer
+    // don't let houses get between the camera and the hero: step in closer if that leaves some room,
+    // otherwise crane up over the roofs, and only as a last resort end up close behind
     if (collide) {
       const from = V(p.x, 1.4 + p.y, p.z);
       const clear = (to) => {
@@ -511,8 +524,9 @@ export function createRenderer(canvas) {
         return { best, len };
       };
       let c = clear(pos);
-      if (c.best < c.len) {
-        for (const up of [3, 6, 9]) {
+      if (c.best < c.len && c.best > 3.5) pos = from.clone().addScaledVector(ray.direction, c.best - 0.3); // room enough: step in
+      else if (c.best < c.len) {
+        for (const up of [2, 4, 6, 9]) {
           const hi = pos.clone().setY(pos.y + up), h = clear(hi);
           if (h.best >= h.len) { pos = hi; c = h; break; }
         }

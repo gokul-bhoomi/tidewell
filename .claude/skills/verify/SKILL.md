@@ -57,6 +57,7 @@ World units are about a metre. North is -z. The plaza is around (0, 0) with the 
 1. **Title**: `screen: 'title'`, the village orbiting, and the title text says nothing about him.
 2. **Landing**: Enter → the hero falls (`player.y` > 0) and lands with dust. The Elder and Pip react in speech bubbles, and the Elder sends you to Bram.
 3. **Tutorial**: yard → hit 3 dummies (J prompt) → combo (J J J) → block Bram twice (K prompt; he winds up slowly and never hurts) → `roam1`.
+3b. **Direction**: after the Elder asks for help, a chapter card, then a NEW OBJECTIVE popup (top right). The quest card (top left) shows the chapter, objective and why. There are **!** marks over villagers still to meet and a marker toward the goal. `d.mouse(dx, dy)` turns and tilts the camera (`snapshot().camYaw` / `camPitch`).
 4. **Roaming and talking**: villagers walk their routes. Next to one, the "E Talk to NAME" prompt shows; E → a speech bubble above them. 4 talks → Gil's alarm → `fight1`.
 5. **Fights**: villagers hide. Fight 1 is 4 grunts (easy). Fight 2 is grunts + brutes (armored windups, heavy blocks push you back) + a second brute mid-fight. Fight 3 is Gorr (boss bar, ground slam ring you walk out of) + reinforcements at half HP. After each fight: VICTORY, villagers crowd round cheering and praise you, then talk to Toma or Mira (healing).
 6. **Festival**: dusk, lanterns and bunting, everyone dancing in the plaza, festival music. Talk to Toma → toast → CHEERS!!
